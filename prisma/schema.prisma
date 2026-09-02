@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum BillingPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model Organization {
+  id               String       @id @default(uuid())
+  name             String
+  plan             BillingPlan  @default(FREE)
+  stripeCustomerId String?      @unique
+  userId    String   // Maps directly to the Clerk auth token
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  projects         Project[]
+}
+
+model Project {
+  id             String        @id @default(uuid())
+  organizationId String
+  name           String
+  status         ProjectStatus @default(ACTIVE)
+  budget         Float
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
