@@ -18,10 +18,15 @@ export async function createProject(formData: FormData) {
     throw new Error('Missing required fields');
   }
 
-  const organization = await prisma.organization.findUnique({
+ // Zero-trust verification: Ensure the organization exists and the user is a member
+  const organization = await prisma.organization.findFirst({
     where: {
       id: organizationId,
-      userId: userId,
+      members: {
+        some: {
+          userId: userId,
+        },
+      },
     },
   });
 
@@ -41,7 +46,7 @@ export async function createProject(formData: FormData) {
 
 export async function deleteProject(formData: FormData) {
   const { userId } = await auth();
-  
+
   if (!userId) {
     throw new Error('Unauthorized request');
   }
@@ -53,11 +58,17 @@ export async function deleteProject(formData: FormData) {
     throw new Error('Missing required fields');
   }
 
+  // Deep relational zero-trust verification
   const project = await prisma.project.findFirst({
     where: {
       id: projectId,
+      organizationId: organizationId,
       organization: {
-        userId: userId,
+        members: {
+          some: {
+            userId: userId,
+          },
+        },
       },
     },
   });

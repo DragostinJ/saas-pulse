@@ -15,11 +15,21 @@ export default async function HomePage() {
     redirect('/sign-in');
   }
 
-  const organizations = await prisma.organization.findMany({
+const organizations = await prisma.organization.findMany({
     where: {
-      userId: userId,
+      members: {
+        some: {
+          userId: userId,
+        },
+      },
     },
-    orderBy: { createdAt: 'desc' },
+    include: {
+      projects: true,
+      members: true, 
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
   });
 
   return (

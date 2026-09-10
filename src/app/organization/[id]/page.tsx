@@ -6,6 +6,7 @@ import { SubmitButton } from '@/components/submit-button';
 import { DeleteButton } from '@/components/delete-button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
+import { MembersManager } from '@/components/members-manager';
 
 interface OrganizationPageProps {
   params: Promise<{
@@ -14,21 +15,21 @@ interface OrganizationPageProps {
 }
 
 export default async function OrganizationPage({ params }: OrganizationPageProps) {
-  // 1. Resolve the asynchronous parameters first
   const { id } = await params;
-  
-  // 2. Resolve the authentication state
   const { userId } = await auth();
 
   if (!userId) {
     redirect('/sign-in');
   }
 
-  // 3. Execute the strictly typed database query
-  const organization = await prisma.organization.findUnique({
+  const organization = await prisma.organization.findFirst({
     where: {
       id: id,
-      userId: userId,
+      members: {
+        some: {
+          userId: userId,
+        },
+      },
     },
     include: {
       projects: {
@@ -36,12 +37,38 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
           createdAt: 'desc',
         },
       },
+      members: true,
     },
   });
 
   if (!organization) {
     redirect('/');
   }
+
+  const totalProjects = await prisma.project.count({
+    where: {
+      organizationId: id,
+    },
+  });
+
+  const totalTasks = await prisma.task.count({
+    where: {
+      project: {
+        organizationId: id,
+      },
+    },
+  });
+
+  const completedTasks = await prisma.task.count({
+    where: {
+      project: {
+        organizationId: id,
+      },
+      status: 'DONE',
+    },
+  });
+
+  const progressPercentage = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
   return (
     <main className="p-8 max-w-4xl mx-auto flex flex-col gap-8">
@@ -50,6 +77,27 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
           {organization.name} Workspace
         </h1>
       </header>
+
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-slate-950 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-1">
+          <span className="text-sm font-medium text-slate-500">Total Projects</span>
+          <span className="text-3xl font-bold text-slate-900 dark:text-slate-100">{totalProjects}</span>
+        </div>
+        <div className="bg-white dark:bg-slate-950 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-1">
+          <span className="text-sm font-medium text-slate-500">Active Tasks</span>
+          <span className="text-3xl font-bold text-slate-900 dark:text-slate-100">{totalTasks}</span>
+        </div>
+        <div className="bg-white dark:bg-slate-950 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-1">
+          <span className="text-sm font-medium text-slate-500">Completion Rate</span>
+          <span className="text-3xl font-bold text-slate-900 dark:text-slate-100">{progressPercentage}%</span>
+        </div>
+      </section>
+
+      <MembersManager 
+        organizationId={organization.id} 
+        members={organization.members} 
+        currentUserId={userId} 
+      />
 
       <section className="bg-slate-100 dark:bg-slate-950 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
         <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-slate-200">
@@ -64,7 +112,8 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
             required
             className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
           />
-          <SubmitButton />
+   
+<SubmitButton label="Deploy Project" loadingLabel="Deploying..." />
         </form>
       </section>
 

@@ -5,6 +5,7 @@ import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { TaskStatus } from '@prisma/client';
 
+
 export async function createTask(formData: FormData) {
   const { userId } = await auth();
 
@@ -15,18 +16,23 @@ export async function createTask(formData: FormData) {
   const title = formData.get('title') as string;
   const projectId = formData.get('projectId') as string;
   const organizationId = formData.get('organizationId') as string;
+  const rawDeadline = formData.get('deadline') as string;
 
   if (!title || !projectId || !organizationId) {
     throw new Error('Missing required fields');
   }
 
-  // Zero-trust verification: Ensure the project exists and belongs to the user's organization
+// Inside src/actions/task.ts
   const project = await prisma.project.findFirst({
     where: {
       id: projectId,
       organizationId: organizationId,
       organization: {
-        userId: userId,
+        members: {
+          some: {
+            userId: userId,
+          },
+        },
       },
     },
   });
@@ -35,10 +41,13 @@ export async function createTask(formData: FormData) {
     throw new Error('Project not found or unauthorized access attempt');
   }
 
+  const deadline = rawDeadline ? new Date(rawDeadline) : null;
+
   await prisma.task.create({
     data: {
       title,
       projectId,
+      deadline,
     },
   });
 
@@ -61,7 +70,7 @@ export async function updateTaskStatus(formData: FormData) {
     throw new Error('Missing required fields');
   }
 
-  // Deep relational zero-trust verification
+  // Traverse the relationship tree to verify RBAC membership
   const task = await prisma.task.findFirst({
     where: {
       id: taskId,
@@ -69,7 +78,11 @@ export async function updateTaskStatus(formData: FormData) {
       project: {
         organizationId: organizationId,
         organization: {
-          userId: userId,
+          members: {
+            some: {
+              userId: userId,
+            },
+          },
         },
       },
     },
@@ -90,6 +103,7 @@ export async function updateTaskStatus(formData: FormData) {
 
   revalidatePath(`/organization/${organizationId}/project/${projectId}`);
 }
+
 export async function deleteTask(formData: FormData) {
   const { userId } = await auth();
 
@@ -105,6 +119,7 @@ export async function deleteTask(formData: FormData) {
     throw new Error('Missing required fields');
   }
 
+  // Traverse the relationship tree to verify RBAC membership
   const task = await prisma.task.findFirst({
     where: {
       id: taskId,
@@ -112,7 +127,11 @@ export async function deleteTask(formData: FormData) {
       project: {
         organizationId: organizationId,
         organization: {
-          userId: userId,
+          members: {
+            some: {
+              userId: userId,
+            },
+          },
         },
       },
     },
