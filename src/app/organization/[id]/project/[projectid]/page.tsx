@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { KanbanBoard } from '@/components/kanban-board';
 import { CreateTaskForm } from '@/components/create-task-form';
+import { type TaskStatus } from '@/actions/task';
 
 interface ProjectPageProps {
   params: Promise<{
@@ -44,6 +45,13 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     redirect(`/organization/${id}`);
   }
 
+  const formattedTasks = project.tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status as TaskStatus,
+    deadline: task.deadline,
+  }));
+
   return (
     <main className="p-8 max-w-4xl mx-auto flex flex-col gap-8">
       <header className="pb-6 border-b border-slate-200 dark:border-slate-800">
@@ -65,11 +73,11 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           Sprint Board
         </h2>
         
-        {project.tasks.length === 0 ? (
+        {formattedTasks.length === 0 ? (
           <p className="text-slate-500">No tasks found. Create one above.</p>
         ) : (
           <KanbanBoard 
-            initialTasks={project.tasks} 
+            initialTasks={formattedTasks} 
             projectId={project.id} 
             organizationId={id} 
           />
