@@ -1,80 +1,76 @@
-import { Role } from '@prisma/client';
-import { inviteMember, updateMemberRole } from '@/actions/member';
-import { SubmitButton } from '@/components/submit-button';
-import { Input } from '@/components/ui/input';
+'use client';
 
-interface Member {
+import { updateMemberRole } from '@/actions/members';
+import { useTransition } from 'react';
+
+interface HydratedMember {
   id: string;
   userId: string;
-  role: Role;
-  organizationId: string;
+  role: string;
+  name: string;
+  imageUrl?: string;
 }
 
 interface MembersManagerProps {
   organizationId: string;
-  members: Member[];
+  members: HydratedMember[];
   currentUserId: string;
 }
 
 export function MembersManager({ organizationId, members, currentUserId }: MembersManagerProps) {
-  const currentUserRole = members.find(m => m.userId === currentUserId)?.role;
-  const isAdmin = currentUserRole === Role.ADMIN;
+  const [isPending, startTransition] = useTransition();
+  
+  const currentMember = members.find((m) => m.userId === currentUserId);
+  const adminCount = members.filter((m) => m.role === 'ADMIN').length;
+  
+  const canManage = currentMember?.role === 'ADMIN' || adminCount === 0;
 
   return (
-    <section className="bg-slate-100 dark:bg-slate-950 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-200 mb-2">
-          Workspace Members
-        </h2>
-        <ul className="flex flex-col gap-3">
-          {members.map((member) => (
-            <li key={member.id} className="flex justify-between items-center bg-white dark:bg-slate-900 p-3 rounded-md border border-slate-200 dark:border-slate-700">
-              <span className="font-mono text-sm text-slate-600 dark:text-slate-400">
-                {member.userId === currentUserId ? 'You' : member.userId}
-              </span>
-              
-              <div className="flex items-center gap-3">
-                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${member.role === Role.ADMIN ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
-                  {member.role}
-                </span>
-
-                {isAdmin && member.userId !== currentUserId && (
-                  <form action={updateMemberRole}>
-                    <input type="hidden" name="memberId" value={member.id} />
-                    <input type="hidden" name="organizationId" value={organizationId} />
-                    <input type="hidden" name="newRole" value={member.role === Role.ADMIN ? Role.MEMBER : Role.ADMIN} />
-                    <button 
-                      type="submit" 
-                      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                    >
-                      Make {member.role === Role.ADMIN ? 'Member' : 'Admin'}
-                    </button>
-                  </form>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+    <section className="bg-slate-900 p-6 rounded-lg border border-slate-800 shadow-sm flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xl font-bold text-slate-100">Team Members</h3>
+        {canManage && (
+          <span className="px-2.5 py-1 text-xs font-semibold bg-indigo-950 text-indigo-300 rounded-full">
+            Admin Control Panel
+          </span>
+        )}
       </div>
 
-      {isAdmin && (
-        <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-200 mb-3">
-            Invite New Member
-          </h3>
-          <form action={inviteMember} className="flex gap-4 max-w-md">
-            <input type="hidden" name="organizationId" value={organizationId} />
-            <Input
-              type="text"
-              name="newMemberId"
-              placeholder="Enter Clerk User ID"
-              required
-              className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
-            />
-           <SubmitButton label="Invite Member" loadingLabel="Inviting..." />
-          </form>
-        </div>
-      )}
+      <div className="divide-y divide-slate-800">
+        {members.map((member) => (
+          <div key={member.id} className="py-3 flex items-center justify-between text-sm">
+            <div className="flex items-center gap-3">
+              {member.imageUrl ? (
+                <img src={member.imageUrl} alt={member.name} className="w-8 h-8 rounded-full" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
+                  {member.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="font-medium text-slate-300">{member.name}</span>
+            </div>
+            
+            {canManage ? (
+              <select
+                disabled={isPending || (member.userId === currentUserId && adminCount === 1)}
+                defaultValue={member.role}
+                onChange={(e) => {
+                  const newRole = e.target.value;
+                  startTransition(async () => {
+                    await updateMemberRole(member.id, newRole, organizationId);
+                  });
+                }}
+                className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs font-semibold uppercase text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
+              >
+                <option value="MEMBER">Member</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            ) : (
+              <span className="uppercase text-xs font-bold text-slate-500">{member.role}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

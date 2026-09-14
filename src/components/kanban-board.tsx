@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { TaskStatus } from '@prisma/client';
 import { DndContext, DragEndEvent, closestCorners, useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { updateTaskStatus } from '@/actions/task';
+import { type TaskStatus, updateTaskStatus } from '@/actions/task';
 import { format } from 'date-fns';
 import { TaskActions } from '@/components/task-actions';
+import { toast } from 'sonner';
 
 interface Task {
   id: string;
@@ -117,8 +117,10 @@ export function KanbanBoard({ initialTasks, projectId, organizationId }: KanbanB
       
       try {
         await updateTaskStatus(formData);
+        toast.success('Task status updated');
       } catch (error) {
         console.error('Failed to update task status', error);
+        toast.error('Failed to move task. Reverting change.');
         setTasks(initialTasks); 
       }
     });

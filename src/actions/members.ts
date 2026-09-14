@@ -3,7 +3,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { Role } from '@prisma/client';
 
 export async function updateMemberRole(memberId: string, newRole: string, organizationId: string) {
   const { userId } = await auth();
@@ -12,15 +11,13 @@ export async function updateMemberRole(memberId: string, newRole: string, organi
     throw new Error('Unauthorized action');
   }
 
-  // Check how many admins currently exist in this organization
   const adminCount = await prisma.member.count({
     where: {
       organizationId,
-      role: Role.ADMIN,
+      role: 'ADMIN',
     },
   });
 
-  // Verify if the current user is an admin, OR if there are zero admins (bootstrap mode)
   const currentMember = await prisma.member.findFirst({
     where: {
       userId,
@@ -32,9 +29,8 @@ export async function updateMemberRole(memberId: string, newRole: string, organi
     throw new Error('Forbidden: You are not a member of this organization');
   }
 
-  const isAdmin = currentMember.role === Role.ADMIN;
-  
-  // Allow the action if they are an admin, OR if no admins exist yet (bootstrap safety)
+  const isAdmin = currentMember.role === 'ADMIN';
+
   if (!isAdmin && adminCount > 0) {
     throw new Error('Forbidden: Only administrators can modify member roles');
   }
@@ -44,7 +40,7 @@ export async function updateMemberRole(memberId: string, newRole: string, organi
       id: memberId,
     },
     data: {
-      role: newRole as Role,
+      role: newRole as any,
     },
   });
 

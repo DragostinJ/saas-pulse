@@ -3,8 +3,9 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
-import { TaskStatus } from '@prisma/client';
 
+// Define the type locally to replace the broken Prisma enum export
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 
 export async function createTask(formData: FormData) {
   const { userId } = await auth();
@@ -22,7 +23,6 @@ export async function createTask(formData: FormData) {
     throw new Error('Missing required fields');
   }
 
-// Inside src/actions/task.ts
   const project = await prisma.project.findFirst({
     where: {
       id: projectId,
@@ -48,6 +48,7 @@ export async function createTask(formData: FormData) {
       title,
       projectId,
       deadline,
+      status: 'TODO', 
     },
   });
 
@@ -70,7 +71,6 @@ export async function updateTaskStatus(formData: FormData) {
     throw new Error('Missing required fields');
   }
 
-  // Traverse the relationship tree to verify RBAC membership
   const task = await prisma.task.findFirst({
     where: {
       id: taskId,
@@ -119,7 +119,6 @@ export async function deleteTask(formData: FormData) {
     throw new Error('Missing required fields');
   }
 
-  // Traverse the relationship tree to verify RBAC membership
   const task = await prisma.task.findFirst({
     where: {
       id: taskId,

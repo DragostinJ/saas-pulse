@@ -1,12 +1,15 @@
-import { prisma } from '@/lib/prisma';
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { prisma } from '@/lib/prisma';
 import { createProject, deleteProject } from '@/actions/project';
 import { SubmitButton } from '@/components/submit-button';
 import { DeleteButton } from '@/components/delete-button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { MembersManager } from '@/components/members-manager';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
 
 interface OrganizationPageProps {
   params: Promise<{
@@ -45,36 +48,63 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
     redirect('/');
   }
 
+  // 1. Prisma Aggregations (Kept completely intact)
   const totalProjects = await prisma.project.count({
-    where: {
-      organizationId: id,
-    },
+    where: { organizationId: id },
   });
 
   const totalTasks = await prisma.task.count({
-    where: {
-      project: {
-        organizationId: id,
-      },
-    },
+    where: { project: { organizationId: id } },
   });
 
   const completedTasks = await prisma.task.count({
-    where: {
-      project: {
-        organizationId: id,
-      },
+    where: { 
+      project: { organizationId: id },
       status: 'DONE',
     },
   });
 
   const progressPercentage = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
+  // 2. Clerk Data Hydration (New injection)
+  const client = await clerkClient();
+  const memberUserIds = organization.members.map((m) => m.userId);
+  
+  const clerkUsers = await client.users.getUserList({
+    userId: memberUserIds,
+  });
+
+  const hydratedMembers = organization.members.map((dbMember) => {
+    const clerkUser = clerkUsers.data.find((u) => u.id === dbMember.userId);
+    
+    const fullName = clerkUser?.firstName 
+      ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() 
+      : null;
+      
+    const fallbackName = clerkUser?.emailAddresses[0]?.emailAddress || dbMember.userId;
+
+    return {
+      id: dbMember.id,
+      userId: dbMember.userId,
+      role: dbMember.role,
+      name: fullName || fallbackName,
+      imageUrl: clerkUser?.imageUrl || '',
+    };
+  });
+
+  // 3. Render the UI
   return (
     <main className="p-8 max-w-4xl mx-auto flex flex-col gap-8">
+      <Link
+        href={`/organization/${id}/billing`}
+        className={cn(buttonVariants({ variant: 'outline' }), "w-fit mb-4")}
+      >
+        Manage Billing & Upgrades
+      </Link>
+
       <header className="pb-6 border-b border-slate-200 dark:border-slate-800">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          {organization.name} Workspace
+          Workspace Dashboard
         </h1>
       </header>
 
@@ -93,10 +123,11 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
         </div>
       </section>
 
-      <MembersManager 
-        organizationId={organization.id} 
-        members={organization.members} 
-        currentUserId={userId} 
+      {/* Passing the newly hydrated data to the client component */}
+      <MembersManager
+        organizationId={organization.id}
+        members={hydratedMembers}
+        currentUserId={userId}
       />
 
       <section className="bg-slate-100 dark:bg-slate-950 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -112,8 +143,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
             required
             className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
           />
-   
-<SubmitButton label="Deploy Project" loadingLabel="Deploying..." />
+          <SubmitButton label="Deploy Project" loadingLabel="Deploying..." />
         </form>
       </section>
 
@@ -121,17 +151,16 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-200">
           Active Projects
         </h2>
-        
         {organization.projects.length === 0 ? (
           <p className="text-slate-500">No projects found. Deploy one above.</p>
         ) : (
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {organization.projects.map((project) => (
-              <li 
-                key={project.id} 
-                className="p-6 flex justify-between items-start rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+              <li
+                key={project.id}
+                className="p-6 flex justify-between items-start rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm"
               >
-                <Link 
+                <Link
                   href={`/organization/${organization.id}/project/${project.id}`}
                   className="flex flex-col gap-2 flex-grow group"
                 >
@@ -142,7 +171,6 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
                     ID: {project.id}
                   </span>
                 </Link>
-                
                 <form action={deleteProject} className="ml-4">
                   <input type="hidden" name="projectId" value={project.id} />
                   <input type="hidden" name="organizationId" value={organization.id} />
