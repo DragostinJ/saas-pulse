@@ -2,16 +2,12 @@ import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
+import { CreateOrganizationForm } from "@/components/create-organization-form";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
 
-  // DEBUG LOGS: Inspect these in your terminal running `npm run dev`
-  console.log("----------------- DEBUG DASHBOARD -----------------");
-  console.log("Current Clerk User ID:", userId);
-
   if (!userId) {
-    console.log("No authenticated user found on server.");
     return null;
   }
 
@@ -28,20 +24,21 @@ export default async function DashboardPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  console.log("Fetched Memberships Count:", memberships.length);
-  console.log("Fetched Organizations:", memberships.map(m => ({ orgId: m.organizationId, name: m.organization.name, role: m.role })));
-  console.log("---------------------------------------------------");
-
   const organizations = memberships.map((m) => m.organization);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col gap-8">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Workspace Dashboard</h1>
           <p className="text-slate-500 mt-1">Manage your SaaS Pulse organizations and active projects.</p>
         </div>
       </div>
+
+      <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 className="text-lg font-semibold mb-3 text-slate-900">Deploy New Workspace</h2>
+        <CreateOrganizationForm />
+      </section>
 
       {organizations.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">

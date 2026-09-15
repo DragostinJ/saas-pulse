@@ -1,10 +1,9 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { createProject, deleteProject } from '@/actions/project';
-import { SubmitButton } from '@/components/submit-button';
+import { deleteProject } from '@/actions/project';
+import { CreateProjectForm } from '@/components/create-project-form';
 import { DeleteButton } from '@/components/delete-button';
-import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { MembersManager } from '@/components/members-manager';
 import { buttonVariants } from '@/components/ui/button';
@@ -66,31 +65,45 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
 
   const progressPercentage = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
-  // 2. Clerk Data Hydration (New injection)
-  const client = await clerkClient();
-  const memberUserIds = organization.members.map((m) => m.userId);
-  
-  const clerkUsers = await client.users.getUserList({
-    userId: memberUserIds,
-  });
+  // 2. Clerk Data Hydration with resilient fallback
+  let hydratedMembers = organization.members.map((dbMember) => ({
+    id: dbMember.id,
+    userId: dbMember.userId,
+    role: dbMember.role,
+    name: dbMember.userId,
+    imageUrl: '',
+  }));
 
-  const hydratedMembers = organization.members.map((dbMember) => {
-    const clerkUser = clerkUsers.data.find((u) => u.id === dbMember.userId);
+  try {
+    const client = await clerkClient();
+    const memberUserIds = organization.members.map((m) => m.userId);
     
-    const fullName = clerkUser?.firstName 
-      ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() 
-      : null;
-      
-    const fallbackName = clerkUser?.emailAddresses[0]?.emailAddress || dbMember.userId;
+    if (memberUserIds.length > 0) {
+      const clerkUsers = await client.users.getUserList({
+        userId: memberUserIds,
+      });
 
-    return {
-      id: dbMember.id,
-      userId: dbMember.userId,
-      role: dbMember.role,
-      name: fullName || fallbackName,
-      imageUrl: clerkUser?.imageUrl || '',
-    };
-  });
+      hydratedMembers = organization.members.map((dbMember) => {
+        const clerkUser = clerkUsers.data.find((u) => u.id === dbMember.userId);
+        
+        const fullName = clerkUser?.firstName 
+          ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() 
+          : null;
+          
+        const fallbackName = clerkUser?.emailAddresses[0]?.emailAddress || dbMember.userId;
+
+        return {
+          id: dbMember.id,
+          userId: dbMember.userId,
+          role: dbMember.role,
+          name: fullName || fallbackName,
+          imageUrl: clerkUser?.imageUrl || '',
+        };
+      });
+    }
+  } catch (error) {
+    console.warn('[Clerk Hydration Warning] Failed to fetch Clerk user details, using fallback data:', error);
+  }
 
   // 3. Render the UI
   return (
@@ -134,17 +147,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
         <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-slate-200">
           Deploy New Project
         </h2>
-        <form action={createProject} className="flex gap-4 max-w-md">
-          <input type="hidden" name="organizationId" value={organization.id} />
-          <Input
-            type="text"
-            name="name"
-            placeholder="Enter Project Name"
-            required
-            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
-          />
-          <SubmitButton label="Deploy Project" loadingLabel="Deploying..." />
-        </form>
+        <CreateProjectForm organizationId={organization.id} />
       </section>
 
       <section className="flex flex-col gap-4">
