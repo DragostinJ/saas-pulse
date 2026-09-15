@@ -38,21 +38,28 @@ export async function POST(req: Request) {
     return new Response("Error occurred during verification", { status: 400 });
   }
 
-  const eventType = evt.type;
+  const eventType = evt?.type;
+
+  // Gracefully handle test webhooks or unknown event types without crashing
+  if (!eventType) {
+    return NextResponse.json({ success: true, message: "Received test or empty event" }, { status: 200 });
+  }
 
   try {
     if (eventType === "organization.created" || eventType === "organization.updated") {
-      const data = evt.data as { id: string; name: string };
-      await prisma.organization.upsert({
-        where: { id: data.id },
-        update: { name: data.name },
-        create: { id: data.id, name: data.name },
-      });
+      const data = evt.data as { id?: string; name?: string };
+      if (data?.id && data?.name) {
+        await prisma.organization.upsert({
+          where: { id: data.id },
+          update: { name: data.name },
+          create: { id: data.id, name: data.name },
+        });
+      }
     }
 
     if (eventType === "organization.deleted") {
       const data = evt.data as { id?: string };
-      if (data.id) {
+      if (data?.id) {
         await prisma.organization.delete({
           where: { id: data.id },
         });
@@ -61,43 +68,48 @@ export async function POST(req: Request) {
 
     if (eventType === "organizationMembership.created") {
       const data = evt.data as any;
-      const org = data.organization;
-      const userData = data.public_user_data;
-      const rawRole = data.role ? data.role.replace("org:", "").toUpperCase() : "MEMBER";
-      const memberRole: Role = rawRole === "ADMIN" ? Role.ADMIN : Role.MEMBER;
+      const org = data?.organization;
+      const userData = data?.public_user_data;
 
-      await prisma.organization.upsert({
-        where: { id: org.id },
-        update: { name: org.name },
-        create: { id: org.id, name: org.name },
-      });
+      if (org?.id && userData?.user_id) {
+        const rawRole = data.role ? data.role.replace("org:", "").toUpperCase() : "MEMBER";
+        const memberRole: Role = rawRole === "ADMIN" ? Role.ADMIN : Role.MEMBER;
 
-      await prisma.member.upsert({
-        where: {
-          userId_organizationId: {
+        await prisma.organization.upsert({
+          where: { id: org.id },
+          update: { name: org.name || "Unnamed Workspace" },
+          create: { id: org.id, name: org.name || "Unnamed Workspace" },
+        });
+
+        await prisma.member.upsert({
+          where: {
+            userId_organizationId: {
+              userId: userData.user_id,
+              organizationId: org.id,
+            },
+          },
+          update: {
+            role: memberRole,
+          },
+          create: {
             userId: userData.user_id,
             organizationId: org.id,
+            role: memberRole,
           },
-        },
-        update: {
-          role: memberRole,
-        },
-        create: {
-          userId: userData.user_id,
-          organizationId: org.id,
-          role: memberRole,
-        },
-      });
+        });
+      }
     }
 
     if (eventType === "organizationMembership.deleted") {
       const data = evt.data as any;
-      await prisma.member.deleteMany({
-        where: {
-          userId: data.public_user_data.user_id,
-          organizationId: data.organization.id,
-        },
-      });
+      if (data?.public_user_data?.user_id && data?.organization?.id) {
+        await prisma.member.deleteMany({
+          where: {
+            userId: data.public_user_data.user_id,
+            organizationId: data.organization.id,
+          },
+        });
+      }
     }
   } catch (dbError) {
     console.error("Database operation failed during webhook handling:", dbError);
