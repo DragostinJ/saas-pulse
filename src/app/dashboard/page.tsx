@@ -1,16 +1,21 @@
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { PlusCircle, Building2 } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
 
+  // DEBUG LOGS: Inspect these in your terminal running `npm run dev`
+  console.log("----------------- DEBUG DASHBOARD -----------------");
+  console.log("Current Clerk User ID:", userId);
+
   if (!userId) {
+    console.log("No authenticated user found on server.");
     return null;
   }
 
-  // Fetch all organizations where the current Clerk user is a member
+  // Fetch all memberships for this specific user
   const memberships = await prisma.member.findMany({
     where: { userId },
     include: {
@@ -22,6 +27,10 @@ export default async function DashboardPage() {
     },
     orderBy: { createdAt: "desc" },
   });
+
+  console.log("Fetched Memberships Count:", memberships.length);
+  console.log("Fetched Organizations:", memberships.map(m => ({ orgId: m.organizationId, name: m.organization.name, role: m.role })));
+  console.log("---------------------------------------------------");
 
   const organizations = memberships.map((m) => m.organization);
 
@@ -37,8 +46,8 @@ export default async function DashboardPage() {
       {organizations.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
           <Building2 className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-          <h3 className="text-lg font-medium text-slate-900">No organizations found</h3>
-          <p className="text-sm text-slate-500 mt-1 mb-6">Create or select an organization using the top navigation bar to get started.</p>
+          <h3 className="text-lg font-medium text-slate-900">No organizations found for user: {userId}</h3>
+          <p className="text-sm text-slate-500 mt-1 mb-6">Check your terminal logs to see why memberships are empty.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -59,7 +68,7 @@ export default async function DashboardPage() {
               <h2 className="text-xl font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
                 {org.name}
               </h2>
-              <p className="text-sm text-slate-500 mt-2">Created on {new Date(org.createdAt).toLocaleDateString()}</p>
+              <p className="text-sm text-slate-500 mt-2">ID: {org.id}</p>
             </Link>
           ))}
         </div>
