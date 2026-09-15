@@ -5,8 +5,19 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
 }
 
 model Organization {
@@ -28,6 +39,8 @@ model Project {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   tasks          Task[]
+
+  @@index([organizationId])
 }
 
 model Member {
@@ -35,20 +48,26 @@ model Member {
   userId         String       // Clerk User ID
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  role           String       @default("MEMBER")
+  role           Role         @default(MEMBER)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
 }
 
 model Task {
-  id          String   @id @default(uuid())
+  id          String     @id @default(uuid())
   title       String
   description String?
-  status      String   @default("TODO")
+  status      TaskStatus @default(TODO)
   deadline    DateTime?
-  completed   Boolean  @default(false)
+  completed   Boolean    @default(false)
   projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([projectId])
 }
