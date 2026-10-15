@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
 // Define the type locally to replace the broken Prisma enum export
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
@@ -55,28 +56,43 @@ export async function createTask(formData: FormData) {
   revalidatePath(`/organization/${organizationId}/project/${projectId}`);
 }
 
+const updateTaskStatusSchema = z.object({
+  taskId: z.string().min(1, 'Task ID is required'),
+  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE'], { message: 'Invalid task status' }),
+  projectId: z.string().min(1, 'Project ID is required'),
+  organizationId: z.string().min(1, 'Organization ID is required'),
+});
+
 export async function updateTaskStatus(formData: FormData) {
   const { userId } = await auth();
 
   if (!userId) {
-    throw new Error('Unauthorized request');
+    return {
+      success: false,
+      error: 'Unauthorized request',
+    };
   }
 
-  const taskId = formData.get('taskId') as string;
-  const status = formData.get('status') as TaskStatus;
-  const projectId = formData.get('projectId') as string;
-  const organizationId = formData.get('organizationId') as string;
+  const validation = updateTaskStatusSchema.safeParse({
+    taskId: formData.get('taskId'),
+    status: formData.get('status'),
+    projectId: formData.get('projectId'),
+    organizationId: formData.get('organizationId'),
+  });
 
-  if (!taskId || !status || !projectId || !organizationId) {
-    throw new Error('Missing required fields');
+  if (!validation.success) {
+    return {
+      success: false,
+      error: validation.error.issues[0].message,
+    };
   }
 
   const task = await prisma.task.findFirst({
     where: {
-      id: taskId,
-      projectId: projectId,
+      id: validation.data.taskId,
+      projectId: validation.data.projectId,
       project: {
-        organizationId: organizationId,
+        organizationId: validation.data.organizationId,
         organization: {
           members: {
             some: {
@@ -89,19 +105,25 @@ export async function updateTaskStatus(formData: FormData) {
   });
 
   if (!task) {
-    throw new Error('Task not found or unauthorized access attempt');
+    return {
+      success: false,
+      error: 'Task not found or unauthorized access attempt',
+    };
   }
 
   await prisma.task.update({
     where: {
-      id: taskId,
+      id: validation.data.taskId,
     },
     data: {
-      status: status,
+      status: validation.data.status,
     },
   });
 
-  revalidatePath(`/organization/${organizationId}/project/${projectId}`);
+  revalidatePath(`/organization/${validation.data.organizationId}/project/${validation.data.projectId}`);
+  return {
+    success: true,
+  };
 }
 
 export async function deleteTask(formData: FormData) {
