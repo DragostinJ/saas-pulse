@@ -1,9 +1,8 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { deleteProject } from '@/actions/project';
 import { CreateProjectForm } from '@/components/create-project-form';
-import { DeleteButton } from '@/components/delete-button';
+import { DeleteProjectButton } from '@/components/delete-button';
 import Link from 'next/link';
 import { MembersManager } from '@/components/members-manager';
 import { buttonVariants } from '@/components/ui/button';
@@ -174,11 +173,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
                     ID: {project.id}
                   </span>
                 </Link>
-                <form action={deleteProject} className="ml-4">
-                  <input type="hidden" name="projectId" value={project.id} />
-                  <input type="hidden" name="organizationId" value={organization.id} />
-                  <DeleteButton />
-                </form>
+                <DeleteProjectButton projectId={project.id} organizationId={organization.id} />
               </li>
             ))}
           </ul>

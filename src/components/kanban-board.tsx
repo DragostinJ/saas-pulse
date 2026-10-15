@@ -115,14 +115,15 @@ export function KanbanBoard({ initialTasks, projectId, organizationId }: KanbanB
       formData.append('projectId', projectId);
       formData.append('organizationId', organizationId);
       
-      try {
-        await updateTaskStatus(formData);
-        toast.success('Task status updated');
-      } catch (error) {
-        console.error('Failed to update task status', error);
-        toast.error('Failed to move task. Reverting change.');
-        setTasks(initialTasks); 
+      const result = await updateTaskStatus(formData);
+
+      if (!result.success) {
+        toast.error(result.error);
+        setTasks(initialTasks);
+        return;
       }
+
+      toast.success('Task status updated');
     });
   };
 

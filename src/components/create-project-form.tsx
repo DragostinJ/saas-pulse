@@ -14,13 +14,15 @@ export function CreateProjectForm({ organizationId }: CreateProjectFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
 
   const handleAction = async (formData: FormData) => {
-    try {
-      await createProject(formData);
-      toast.success('Project deployed successfully');
-      formRef.current?.reset();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to deploy project');
+    const result = await createProject(formData);
+
+    if (!result.success) {
+      toast.error(result.error);
+      return;
     }
+
+    toast.success('Project deployed successfully');
+    formRef.current?.reset();
   };
 
   return (
